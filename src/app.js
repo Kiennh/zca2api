@@ -104,7 +104,7 @@ async function start() {
                     event.actions.saveToFile();
                 }
 
-                if (event.type === "GotLoginInfo") {
+                if (event.type === 4) { // GotLoginInfo
                     try {
                         fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
                         console.log("Session saved to disk.");
