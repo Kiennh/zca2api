@@ -1,4 +1,6 @@
 const express = require('express');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('../swagger-config');
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('!!! Unhandled Rejection at:', promise, 'reason:', reason);
@@ -34,6 +36,55 @@ async function start() {
   app.use(cors());
   app.use(bodyParser.json());
   app.use(express.static(path.join(__dirname, '../dashboard')));
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+
+/**
+ * @swagger
+ * /api/auth-status:
+ *   get:
+ *     summary: Get authentication status
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Current authentication and listening status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 isAuthenticated:
+ *                   type: boolean
+ *                 isListening:
+ *                   type: boolean
+ */
+
+/**
+ * @swagger
+ * /api/refresh-qr:
+ *   post:
+ *     summary: Manually refresh login QR code
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Success or failure message
+ */
+
+/**
+ * @swagger
+ * /qr.png:
+ *   get:
+ *     summary: Get login QR code image
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: QR code image file
+ *         content:
+ *           image/png:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
 
   app.get('/qr.png', (req, res) => {
     if (fs.existsSync(QR_FILE)) {
