@@ -76,7 +76,7 @@ async function start() {
     if (!isAuthenticated) {
         console.log("Starting QR login...");
         try {
-            zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent }, (event) => {
+            zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent, qrPath: QR_FILE }, (event) => {
                 if (event.type === "GotLoginInfo") {
                     try {
                         fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
