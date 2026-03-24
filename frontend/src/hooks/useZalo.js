@@ -5,6 +5,7 @@ export function useZalo() {
   const [isListening, setIsListening] = useState(false);
   const [groups, setGroups] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [webhookUrl, setWebhookUrl] = useState('');
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
@@ -72,10 +73,41 @@ export function useZalo() {
     }
   };
 
+  const loadWebhookConfig = useCallback(async () => {
+    try {
+      const res = await fetch('/api/webhook-config');
+      if (res.ok) {
+        const data = await res.json();
+        setWebhookUrl(data.webhookUrl || '');
+      }
+    } catch (e) {
+      console.error('Failed to load webhook config', e);
+    }
+  }, []);
+
+  const updateWebhookConfig = async (url) => {
+    try {
+      const res = await fetch('/api/webhook-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhookUrl: url })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWebhookUrl(data.webhookUrl);
+        return data;
+      }
+    } catch (e) {
+      console.error('Failed to update webhook config', e);
+      throw e;
+    }
+  };
+
   useEffect(() => {
     checkAuthStatus();
     loadGroups();
     loadMessages();
+    loadWebhookConfig();
 
     const authInterval = setInterval(checkAuthStatus, 5000);
     const msgInterval = setInterval(loadMessages, 10000);
@@ -84,19 +116,22 @@ export function useZalo() {
       clearInterval(authInterval);
       clearInterval(msgInterval);
     };
-  }, [checkAuthStatus, loadGroups, loadMessages]);
+  }, [checkAuthStatus, loadGroups, loadMessages, loadWebhookConfig]);
 
   return {
     isAuthenticated,
     isListening,
     groups,
     messages,
+    webhookUrl,
     loadingGroups,
     loadingMessages,
     refreshQR,
     loadGroups,
     loadMessages,
     sendMessage,
-    checkAuthStatus
+    checkAuthStatus,
+    loadWebhookConfig,
+    updateWebhookConfig
   };
 }

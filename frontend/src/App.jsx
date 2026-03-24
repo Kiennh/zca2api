@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@openai/apps-sdk-ui/components/Button';
 import { Input } from '@openai/apps-sdk-ui/components/Input';
 import { Textarea } from '@openai/apps-sdk-ui/components/Textarea';
 import { Select } from '@openai/apps-sdk-ui/components/Select';
 import { Badge } from '@openai/apps-sdk-ui/components/Badge';
-import { Send, RefreshCw, MessageSquare, Users, FileText } from 'lucide-react';
+import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe } from 'lucide-react';
 import { useZalo } from './hooks/useZalo';
 
 export default function App() {
@@ -13,17 +13,25 @@ export default function App() {
     isListening,
     groups, 
     messages, 
+    webhookUrl,
     loadingGroups, 
     refreshQR, 
     loadGroups, 
     loadMessages, 
-    sendMessage 
+    sendMessage,
+    updateWebhookConfig
   } = useZalo();
 
   const [selectedThreadId, setSelectedThreadId] = useState('');
   const [threadType, setThreadType] = useState('user');
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [localWebhookUrl, setLocalWebhookUrl] = useState('');
+  const [isUpdatingWebhook, setIsUpdatingWebhook] = useState(false);
+
+  useEffect(() => {
+    setLocalWebhookUrl(webhookUrl);
+  }, [webhookUrl]);
 
   const groupOptions = useMemo(() => {
     return groups.map(g => ({
@@ -52,6 +60,18 @@ export default function App() {
     }
   };
 
+  const handleUpdateWebhook = async () => {
+    setIsUpdatingWebhook(true);
+    try {
+      await updateWebhookConfig(localWebhookUrl);
+      alert('Webhook configuration updated');
+    } catch (e) {
+      alert('Failed to update webhook');
+    } finally {
+      setIsUpdatingWebhook(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto py-8 px-4">
       <div className="flex flex-col gap-6">
@@ -76,6 +96,32 @@ export default function App() {
                 {isListening ? 'LISTENER UP' : 'LISTENER DOWN'}
               </Badge>
             )}
+          </div>
+        </div>
+
+        <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Settings size={20} className="text-blue-600" />
+            <h3 className="text-lg font-semibold">Configuration</h3>
+          </div>
+          <div className="flex flex-col gap-3">
+            <label className="text-sm font-medium mb-1 block flex items-center gap-2">
+              <Globe size={14} /> Webhook URL (POST messages to this URL)
+            </label>
+            <div className="flex gap-2">
+              <Input
+                value={localWebhookUrl}
+                onChange={(e) => setLocalWebhookUrl(e.target.value)}
+                placeholder="https://your-webhook-endpoint.com/api/callback"
+              />
+              <Button
+                onClick={handleUpdateWebhook}
+                loading={isUpdatingWebhook}
+                variant="primary"
+              >
+                Save
+              </Button>
+            </div>
           </div>
         </div>
 

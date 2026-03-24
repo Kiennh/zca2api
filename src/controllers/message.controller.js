@@ -1,4 +1,4 @@
-module.exports = (zaloService, messageStore) => {
+module.exports = (zaloService, messageStore, configStore) => {
   return {
     sendMessage: async (req, res) => {
       const { text, threadId, type } = req.body;
@@ -33,6 +33,16 @@ module.exports = (zaloService, messageStore) => {
         };
       });
       res.json(formatted);
+    },
+
+    getWebhookConfig: (req, res) => {
+      res.json({ webhookUrl: configStore.getWebhookUrl() });
+    },
+
+    updateWebhookConfig: (req, res) => {
+      const { webhookUrl } = req.body;
+      configStore.setWebhookUrl(webhookUrl);
+      res.json({ success: true, webhookUrl: configStore.getWebhookUrl() });
     }
   };
 };

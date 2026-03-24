@@ -16,6 +16,7 @@ const fs = require('fs');
 const { Zalo } = require('zca-js');
 
 const messageStore = require('./storage/message.store');
+const ConfigStore = require('./storage/config.store');
 const ZaloService = require('./services/zalo.service');
 const setupWebhook = require('./webhooks/zalo.webhook');
 const messageControllerFactory = require('./controllers/message.controller');
@@ -23,6 +24,7 @@ const messageRoutesFactory = require('./routes/message.routes');
 
 const SESSION_DIR = path.join(__dirname, '../sessions');
 const SESSION_FILE = path.join(SESSION_DIR, 'session.json');
+const CONFIG_FILE = path.join(SESSION_DIR, 'config.json');
 const QR_FILE = path.join(SESSION_DIR, 'qr.png');
 
 async function start() {
@@ -98,6 +100,7 @@ async function start() {
   let qrActions = null;
   let zaloApi = null;
   const zaloService = new ZaloService(null, SESSION_FILE);
+  const configStore = new ConfigStore(CONFIG_FILE);
 
   app.get('/api/auth-status', (req, res) => {
     // If not authenticated and QR file is missing but we have actions, re-generate it
@@ -119,7 +122,7 @@ async function start() {
     }
   });
 
-  const messageController = messageControllerFactory(zaloService, messageStore);
+  const messageController = messageControllerFactory(zaloService, messageStore, configStore);
   const messageRoutes = messageRoutesFactory(messageController);
   app.use('/api', messageRoutes);
 
@@ -191,7 +194,7 @@ async function start() {
 
     if (zaloApi) {
       zaloService.client = zaloApi;
-      setupWebhook(zaloService, messageStore);
+      setupWebhook(zaloService, messageStore, configStore);
     }
   }
 
