@@ -1,11 +1,11 @@
 const express = require('express');
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('!!! Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('!!! Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('!!! Uncaught Exception:', err);
+  console.error('!!! Uncaught Exception:', err);
 });
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -51,20 +51,20 @@ async function start() {
   app.get('/api/auth-status', (req, res) => {
     // If not authenticated and QR file is missing but we have actions, re-generate it
     if (!isAuthenticated && !fs.existsSync(QR_FILE) && qrActions) {
-        console.log("QR file missing during status check, re-generating...");
-        qrActions.retry();
+      console.log("QR file missing during status check, re-generating...");
+      qrActions.retry();
     }
-    res.json({ isAuthenticated });
+    res.json({ isAuthenticated, isListening: zaloService.isListening || false });
   });
 
   app.post('/api/refresh-qr', (req, res) => {
     if (isAuthenticated) return res.json({ success: false, message: "Already authenticated" });
     if (qrActions) {
-        console.log("Manual QR refresh requested.");
-        qrActions.retry();
-        res.json({ success: true });
+      console.log("Manual QR refresh requested.");
+      qrActions.retry();
+      res.json({ success: true });
     } else {
-        res.json({ success: false, message: "Login not in progress" });
+      res.json({ success: false, message: "Login not in progress" });
     }
   });
 
@@ -87,60 +87,60 @@ async function start() {
     const zalo = new Zalo({ selfListen: true, checkUpdate: true });
 
     if (fs.existsSync(SESSION_FILE)) {
-        console.log("Found session file, attempting to resume...");
-        try {
-            const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
-            zaloApi = await zalo.login({
-                cookie: sessionData.cookie,
-                imei: sessionData.imei,
-                userAgent: sessionData.userAgent || defaultUserAgent
-            });
-            isAuthenticated = true;
-            console.log("Logged in successfully using saved session!");
-            if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
-            qrActions = null;
-        } catch (e) {
-            console.error("Session login failed:", e.message);
-        }
+      console.log("Found session file, attempting to resume...");
+      try {
+        const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+        zaloApi = await zalo.login({
+          cookie: sessionData.cookie,
+          imei: sessionData.imei,
+          userAgent: sessionData.userAgent || defaultUserAgent
+        });
+        isAuthenticated = true;
+        console.log("Logged in successfully using saved session!");
+        if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
+        qrActions = null;
+      } catch (e) {
+        console.error("Session login failed:", e.message);
+      }
     }
 
     if (!isAuthenticated) {
-        console.log("Starting QR login...");
-        try {
-            zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent, qrPath: QR_FILE }, (event) => {
-                if (event.actions) {
-                    qrActions = event.actions;
-                }
+      console.log("Starting QR login...");
+      try {
+        zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent, qrPath: QR_FILE }, (event) => {
+          if (event.actions) {
+            qrActions = event.actions;
+          }
 
-                if (event.type === 0) { // QRCodeGenerated
-                    console.log("QR Code generated, saving to file...");
-                    event.actions.saveToFile();
-                }
+          if (event.type === 0) { // QRCodeGenerated
+            console.log("QR Code generated, saving to file...");
+            event.actions.saveToFile();
+          }
 
-                if (event.type === 4) { // GotLoginInfo
-                    try {
-                        fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
-                        console.log("Session saved to disk.");
-                    } catch (err) {
-                        console.error("Failed to save session:", err.message);
-                    }
-                }
-            });
-            isAuthenticated = true;
-            console.log("Logged in successfully via QR!");
-            if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
-            qrActions = null;
-        } catch (error) {
-            console.error("QR login failed:", error.message);
-            qrActions = null;
-            setTimeout(loginProcess, 5000);
-            return;
-        }
+          if (event.type === 4) { // GotLoginInfo
+            try {
+              fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
+              console.log("Session saved to disk.");
+            } catch (err) {
+              console.error("Failed to save session:", err.message);
+            }
+          }
+        });
+        isAuthenticated = true;
+        console.log("Logged in successfully via QR!");
+        if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
+        qrActions = null;
+      } catch (error) {
+        console.error("QR login failed:", error.message);
+        qrActions = null;
+        setTimeout(loginProcess, 5000);
+        return;
+      }
     }
 
     if (zaloApi) {
-        zaloService.client = zaloApi;
-        setupWebhook({ client: zaloApi }, messageStore);
+      zaloService.client = zaloApi;
+      setupWebhook(zaloService, messageStore);
     }
   }
 

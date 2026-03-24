@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@import "@openai/apps-sdk-ui/css";
+
+@source "../node_modules/@openai/apps-sdk-ui";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --color-canvas-default: var(--canvas-default, #ffffff);
+  --color-canvas-subtle: var(--canvas-subtle, #f9f9f9);
+  --color-foreground-default: var(--foreground-default, #000000);
+  --color-primary-default: var(--primary-default, #10a37f);
+  --color-border-muted: var(--border-muted, #e5e5e5);
+  --color-border-default: var(--border-default, #cccccc);
+}
+
+html, body {
+  @apply bg-canvas-default text-foreground-default h-full;
+}
+
+#root {
+  @apply h-full;
+}

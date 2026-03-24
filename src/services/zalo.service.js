@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { ThreadType } = require('zca-js');
 
 class ZaloService {
   constructor(client, sessionFile) {
@@ -8,11 +9,9 @@ class ZaloService {
 
   async sendMessage(text, threadId, type = "user") {
     if (!this.client) throw new Error("Zalo client not initialized");
-    return await this.client.sendMessage({
-      msg: text,
-      threadId,
-      type
-    });
+    
+    const threadType = type === "group" ? ThreadType.Group : ThreadType.User;
+    return await this.client.sendMessage(text, threadId, threadType);
   }
 
   async getGroups() {

@@ -20,7 +20,19 @@ module.exports = (zaloService, messageStore) => {
     },
 
     getMessages: async (req, res) => {
-      res.json(messageStore.getAll());
+      const rawMessages = messageStore.getAll();
+      const formatted = rawMessages.map(msg => {
+        const data = msg.data || {};
+        return {
+          from: data.dName || data.uidFrom || (msg.isSelf ? 'Me' : 'Unknown'),
+          time: parseInt(data.ts || Date.now(), 10),
+          text: typeof data.content === 'string' ? data.content : JSON.stringify(data.content || ''),
+          isGroup: msg.type === 1,
+          threadId: msg.threadId,
+          isSelf: msg.isSelf
+        };
+      });
+      res.json(formatted);
     }
   };
 };
