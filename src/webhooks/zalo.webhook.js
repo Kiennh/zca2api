@@ -1,4 +1,4 @@
-module.exports = (zaloService, messageStore, configStore) => {
+module.exports = (zaloService, messageStore, configStore, onFailure) => {
   if (zaloService.client && zaloService.client.listener) {
     zaloService.isListening = false;
 
@@ -10,11 +10,19 @@ module.exports = (zaloService, messageStore, configStore) => {
     zaloService.client.listener.on("closed", () => {
       console.log("Zalo listener closed");
       zaloService.isListening = false;
+      if (typeof onFailure === 'function') onFailure();
     });
 
     zaloService.client.listener.on("disconnected", () => {
       console.log("Zalo listener disconnected");
       zaloService.isListening = false;
+      if (typeof onFailure === 'function') onFailure();
+    });
+
+    zaloService.client.listener.on("error", (err) => {
+      console.error("Zalo listener error:", err.message);
+      zaloService.isListening = false;
+      if (typeof onFailure === 'function') onFailure();
     });
 
     zaloService.client.listener.on("message", async (msg) => {
@@ -50,5 +58,6 @@ module.exports = (zaloService, messageStore, configStore) => {
     zaloService.client.listener.start();
   } else {
     console.error("Zalo client listener not available for webhook setup.");
+    if (typeof onFailure === 'function') onFailure();
   }
 };
