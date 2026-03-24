@@ -5,6 +5,7 @@ class ZaloService {
   constructor(client, sessionFile) {
     this.client = client;
     this.sessionFile = sessionFile;
+    this.isListening = false;
   }
 
   async sendMessage(text, threadId, type = "user") {
@@ -69,7 +70,7 @@ class ZaloService {
             });
           }
         } catch (e) {
-          console.error(`Error fetching group info for chunk starting at ${i}:`, e.message);
+          console.error(`Error fetching group info for chunk starting at ${i}: `, e.message);
         }
       }
     }

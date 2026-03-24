@@ -99,6 +99,7 @@ async function start() {
   let isAuthenticated = false;
   let qrActions = null;
   let zaloApi = null;
+  let isResetting = false;
   const zaloService = new ZaloService(null, SESSION_FILE);
   const configStore = new ConfigStore(CONFIG_FILE);
 
@@ -136,6 +137,35 @@ async function start() {
   }, 3600000); // 1 hour
 
   const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
+
+  async function resetSession() {
+    if (isResetting) return;
+    isResetting = true;
+    console.log("!!! Resetting session due to listener failure...");
+
+    isAuthenticated = false;
+    zaloService.isListening = false;
+    zaloService.client = null;
+    qrActions = null;
+
+    if (fs.existsSync(SESSION_FILE)) {
+      try {
+        fs.unlinkSync(SESSION_FILE);
+        console.log("Session file deleted.");
+      } catch (err) {
+        console.error("Failed to delete session file:", err.message);
+      }
+    }
+
+    if (fs.existsSync(QR_FILE)) {
+      try {
+        fs.unlinkSync(QR_FILE);
+      } catch (err) {}
+    }
+
+    isResetting = false;
+    loginProcess();
+  }
 
   async function loginProcess() {
     const zalo = new Zalo({ selfListen: true, checkUpdate: true });
@@ -194,7 +224,7 @@ async function start() {
 
     if (zaloApi) {
       zaloService.client = zaloApi;
-      setupWebhook(zaloService, messageStore, configStore);
+      setupWebhook(zaloService, messageStore, configStore, resetSession);
     }
   }
 
