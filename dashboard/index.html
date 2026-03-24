@@ -25,7 +25,7 @@
             <h2>Zalo Login QR Code</h2>
             <p>Scan this QR code with your Zalo app to login.</p>
             <img id="qr-image" src="/qr.png" alt="Zalo Login QR Code" class="qr-image">
-            <button onclick="location.reload()">Refresh</button>
+            <button onclick="refreshQR()">Refresh QR Code</button>
         </div>
     </div>
 
@@ -71,10 +71,18 @@
                     statusText.textContent = 'Status: OFFLINE (Scanning Required)';
                     statusText.className = 'auth-status status-offline';
                     qrContainer.style.display = 'block';
-                    // Check if QR image exists
                     const img = document.getElementById('qr-image');
-                    img.src = '/qr.png?' + new Date().getTime(); // Anti-cache
+                    img.src = '/qr.png?' + new Date().getTime();
                 }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function refreshQR() {
+            try {
+                await fetch('/api/refresh-qr', { method: 'POST' });
+                setTimeout(checkAuthStatus, 1000);
             } catch (e) {
                 console.error(e);
             }
@@ -144,7 +152,6 @@
             }
         });
 
-        // Initial loads
         checkAuthStatus();
         loadGroups();
         loadMessages();

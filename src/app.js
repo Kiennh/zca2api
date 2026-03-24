@@ -36,11 +36,28 @@ async function start() {
   });
 
   let isAuthenticated = false;
+  let qrActions = null;
   let zaloApi = null;
   const zaloService = new ZaloService(null);
 
   app.get('/api/auth-status', (req, res) => {
+    // If not authenticated and QR file is missing but we have actions, re-generate it
+    if (!isAuthenticated && !fs.existsSync(QR_FILE) && qrActions) {
+        console.log("QR file missing during status check, re-generating...");
+        qrActions.retry();
+    }
     res.json({ isAuthenticated });
+  });
+
+  app.post('/api/refresh-qr', (req, res) => {
+    if (isAuthenticated) return res.json({ success: false, message: "Already authenticated" });
+    if (qrActions) {
+        console.log("Manual QR refresh requested.");
+        qrActions.retry();
+        res.json({ success: true });
+    } else {
+        res.json({ success: false, message: "Login not in progress" });
+    }
   });
 
   const messageController = messageControllerFactory(zaloService, messageStore);
@@ -68,6 +85,7 @@ async function start() {
             isAuthenticated = true;
             console.log("Logged in successfully using saved session!");
             if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
+            qrActions = null;
         } catch (e) {
             console.error("Session login failed:", e.message);
         }
@@ -77,6 +95,10 @@ async function start() {
         console.log("Starting QR login...");
         try {
             zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent, qrPath: QR_FILE }, (event) => {
+                if (event.actions) {
+                    qrActions = event.actions;
+                }
+
                 if (event.type === "GotLoginInfo") {
                     try {
                         fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
@@ -89,9 +111,10 @@ async function start() {
             isAuthenticated = true;
             console.log("Logged in successfully via QR!");
             if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
+            qrActions = null;
         } catch (error) {
             console.error("QR login failed:", error.message);
-            // Re-run loginProcess if it fails, ensuring QR is re-generated if missing
+            qrActions = null;
             setTimeout(loginProcess, 5000);
             return;
         }
