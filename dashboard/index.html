@@ -9,10 +9,19 @@
         .section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
         .message-item { padding: 5px; border-bottom: 1px solid #eee; }
         .message-time { font-size: 0.8em; color: #666; }
+        .qr-section { text-align: center; }
+        .qr-image { max-width: 300px; margin: 10px auto; display: block; }
     </style>
 </head>
 <body>
     <h1>Zalo Messaging Dashboard</h1>
+
+    <div class="section qr-section" id="qr-container">
+        <h2>Zalo Login QR Code</h2>
+        <p>If you are not logged in, scan this QR code with your Zalo app.</p>
+        <img src="/qr.png" alt="Zalo Login QR Code" class="qr-image" onerror="this.parentElement.style.display='none'">
+        <button onclick="location.reload()">Refresh QR Code</button>
+    </div>
 
     <div class="section">
         <h2>Send Message</h2>
@@ -42,16 +51,21 @@
 
     <script>
         async function loadGroups() {
-            const res = await fetch('/api/groups');
-            const groups = await res.json();
-            const select = document.getElementById('group-select');
-            select.innerHTML = '<option value="">-- Select a group --</option>';
-            groups.forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.id;
-                opt.textContent = g.name;
-                select.appendChild(opt);
-            });
+            try {
+                const res = await fetch('/api/groups');
+                if (!res.ok) throw new Error('Failed to load groups');
+                const groups = await res.json();
+                const select = document.getElementById('group-select');
+                select.innerHTML = '<option value="">-- Select a group --</option>';
+                groups.forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g.id;
+                    opt.textContent = g.name;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         async function sendMessage() {
@@ -73,19 +87,24 @@
         }
 
         async function loadMessages() {
-            const res = await fetch('/api/messages');
-            const messages = await res.json();
-            const list = document.getElementById('messages-list');
-            list.innerHTML = '';
-            messages.forEach(m => {
-                const div = document.createElement('div');
-                div.className = 'message-item';
-                div.innerHTML = `
-                    <div><strong>${m.from || 'Unknown'}:</strong> ${m.text}</div>
-                    <div class="message-time">${new Date(m.time).toLocaleString()}</div>
-                `;
-                list.prepend(div);
-            });
+            try {
+                const res = await fetch('/api/messages');
+                if (!res.ok) throw new Error('Failed to load messages');
+                const messages = await res.json();
+                const list = document.getElementById('messages-list');
+                list.innerHTML = '';
+                messages.forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = 'message-item';
+                    div.innerHTML = `
+                        <div><strong>${m.from || 'Unknown'}:</strong> ${m.text}</div>
+                        <div class="message-time">${new Date(m.time).toLocaleString()}</div>
+                    `;
+                    list.prepend(div);
+                });
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         document.getElementById('group-select').addEventListener('change', (e) => {

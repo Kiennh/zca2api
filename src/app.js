@@ -18,6 +18,12 @@ async function start() {
   app.use(bodyParser.json());
   app.use(express.static(path.join(__dirname, '../dashboard')));
 
+  // Serve the root directory specifically for qr.png access if needed,
+  // but better to move qr.png or serve it explicitly.
+  app.get('/qr.png', (req, res) => {
+    res.sendFile(path.join(__dirname, '../qr.png'));
+  });
+
   const zalo = new Zalo({
     selfListen: true,
     checkUpdate: true
