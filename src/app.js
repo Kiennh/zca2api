@@ -13,7 +13,7 @@ const messageRoutesFactory = require('./routes/message.routes');
 
 const SESSION_DIR = path.join(__dirname, '../sessions');
 const SESSION_FILE = path.join(SESSION_DIR, 'session.json');
-const QR_FILE = path.join(__dirname, '../qr.png');
+const QR_FILE = path.join(SESSION_DIR, 'qr.png');
 
 async function start() {
   if (!fs.existsSync(SESSION_DIR)) {
