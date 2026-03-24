@@ -38,7 +38,7 @@ async function start() {
   let isAuthenticated = false;
   let qrActions = null;
   let zaloApi = null;
-  const zaloService = new ZaloService(null);
+  const zaloService = new ZaloService(null, SESSION_FILE);
 
   app.get('/api/auth-status', (req, res) => {
     // If not authenticated and QR file is missing but we have actions, re-generate it
