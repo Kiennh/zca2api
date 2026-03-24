@@ -30,76 +30,64 @@ async function start() {
     }
   });
 
-  // Simple endpoint to check authentication status
   let isAuthenticated = false;
+  let zaloApi = null;
+  const zaloService = new ZaloService(null);
+
   app.get('/api/auth-status', (req, res) => {
     res.json({ isAuthenticated });
   });
 
-  const zaloConfig = {
+  const zalo = new Zalo({
     selfListen: true,
     checkUpdate: true
-  };
-
-  // Try to load session
-  if (fs.existsSync(SESSION_FILE)) {
-    try {
-      const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
-      zaloConfig.cookie = sessionData.cookie;
-      zaloConfig.imei = sessionData.imei;
-      console.log("Found existing session, attempting to resume...");
-    } catch (e) {
-      console.error("Failed to parse session file:", e);
-    }
-  }
-
-  const zalo = new Zalo(zaloConfig);
-  const zaloService = new ZaloService(zalo);
+  });
 
   const messageController = messageControllerFactory(zaloService, messageStore);
   const messageRoutes = messageRoutesFactory(messageController);
-
   app.use('/api', messageRoutes);
 
   app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
   });
 
+  const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
+
   try {
     console.log("Logging into Zalo...");
-    if (zaloConfig.cookie) {
-        await zalo.login();
-    } else {
-        await zalo.loginQR();
-    }
 
-    isAuthenticated = true;
-    console.log("Logged in successfully!");
-
-    // Save session
-    const session = zalo.getCookie();
-    const imei = zalo.getImei();
-    fs.writeFileSync(SESSION_FILE, JSON.stringify({ cookie: session, imei: imei }));
-    console.log("Session saved.");
-
-    setupWebhook(zalo, messageStore);
-  } catch (error) {
-    console.error("Failed to start Zalo client:", error);
-    // If login fails with cookie, retry with QR
-    if (zaloConfig.cookie) {
-        console.log("Session might be expired, retrying with QR login...");
+    if (fs.existsSync(SESSION_FILE)) {
+        const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
         try {
-            const zaloNew = new Zalo({ selfListen: true, checkUpdate: true });
-            await zaloNew.loginQR();
+            zaloApi = await zalo.login({
+                cookie: sessionData.cookie,
+                imei: sessionData.imei,
+                userAgent
+            });
             isAuthenticated = true;
-            const session = zaloNew.getCookie();
-            const imei = zaloNew.getImei();
-            fs.writeFileSync(SESSION_FILE, JSON.stringify({ cookie: session, imei: imei }));
-            setupWebhook(zaloNew, messageStore);
+            console.log("Logged in successfully using saved session!");
         } catch (e) {
-            console.error("QR login retry failed:", e);
+            console.error("Session login failed, falling back to QR:", e.message);
         }
     }
+
+    if (!isAuthenticated) {
+        zaloApi = await zalo.loginQR({ userAgent }, (event) => {
+            if (event.type === "GotLoginInfo") {
+                fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
+                console.log("Session saved.");
+            }
+        });
+        isAuthenticated = true;
+        console.log("Logged in successfully via QR!");
+    }
+
+    if (zaloApi) {
+        zaloService.client = zaloApi;
+        setupWebhook({ client: zaloApi }, messageStore);
+    }
+  } catch (error) {
+    console.error("Failed to start Zalo client:", error);
   }
 }
 
