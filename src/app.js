@@ -1,4 +1,12 @@
 const express = require('express');
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('!!! Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('!!! Uncaught Exception:', err);
+});
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
@@ -67,6 +75,11 @@ async function start() {
   app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
   });
+
+  // Heartbeat to keep process alive (prevents auto-stop after login)
+  setInterval(() => {
+    // Keep alive
+  }, 3600000); // 1 hour
 
   const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
 
