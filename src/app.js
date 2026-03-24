@@ -11,9 +11,15 @@ const setupWebhook = require('./webhooks/zalo.webhook');
 const messageControllerFactory = require('./controllers/message.controller');
 const messageRoutesFactory = require('./routes/message.routes');
 
-const SESSION_FILE = path.join(__dirname, '../sessions/session.json');
+const SESSION_DIR = path.join(__dirname, '../sessions');
+const SESSION_FILE = path.join(SESSION_DIR, 'session.json');
 
 async function start() {
+  // Ensure session directory exists
+  if (!fs.existsSync(SESSION_DIR)) {
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
+  }
+
   const app = express();
   const port = process.env.PORT || 3001;
 
@@ -51,18 +57,19 @@ async function start() {
     console.log(`Server is running on http://localhost:${port}`);
   });
 
-  const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
+  const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
 
   try {
     console.log("Logging into Zalo...");
 
     if (fs.existsSync(SESSION_FILE)) {
-        const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+        console.log("Found session file, attempting to resume...");
         try {
+            const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
             zaloApi = await zalo.login({
                 cookie: sessionData.cookie,
                 imei: sessionData.imei,
-                userAgent
+                userAgent: sessionData.userAgent || defaultUserAgent
             });
             isAuthenticated = true;
             console.log("Logged in successfully using saved session!");
@@ -72,10 +79,15 @@ async function start() {
     }
 
     if (!isAuthenticated) {
-        zaloApi = await zalo.loginQR({ userAgent }, (event) => {
+        console.log("Starting QR login...");
+        zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent }, (event) => {
             if (event.type === "GotLoginInfo") {
-                fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
-                console.log("Session saved.");
+                try {
+                    fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
+                    console.log("Session saved to disk during login callback:", SESSION_FILE);
+                } catch (err) {
+                    console.error("Failed to save session to disk during login callback:", err.message);
+                }
             }
         });
         isAuthenticated = true;
