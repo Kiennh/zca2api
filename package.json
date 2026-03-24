@@ -1,0 +1,27 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "This project implements: - Zalo messaging integration using zca-js (v2) - REST API to send messages - Webhook to receive message notifications - API to fetch received messages - Simple dashboard UI for testing send/receive messages and group selection",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kiennh/zca2api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Kiennh/zca2api/issues"
+  },
+  "homepage": "https://github.com/Kiennh/zca2api#readme",
+  "dependencies": {
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "zca-js": "^2.1.2"
+  }
+}
