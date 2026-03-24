@@ -97,6 +97,10 @@ async function start() {
             zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent, qrPath: QR_FILE }, (event) => {
                 if (event.actions) {
                     qrActions = event.actions;
+                    if (!fs.existsSync(QR_FILE)) {
+                        console.log("QR file not found on start, retrying generation...");
+                        qrActions.retry();
+                    }
                 }
 
                 if (event.type === "GotLoginInfo") {
