@@ -13,9 +13,9 @@ const messageRoutesFactory = require('./routes/message.routes');
 
 const SESSION_DIR = path.join(__dirname, '../sessions');
 const SESSION_FILE = path.join(SESSION_DIR, 'session.json');
+const QR_FILE = path.join(__dirname, '../qr.png');
 
 async function start() {
-  // Ensure session directory exists
   if (!fs.existsSync(SESSION_DIR)) {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
   }
@@ -28,9 +28,8 @@ async function start() {
   app.use(express.static(path.join(__dirname, '../dashboard')));
 
   app.get('/qr.png', (req, res) => {
-    const qrPath = path.join(__dirname, '../qr.png');
-    if (fs.existsSync(qrPath)) {
-      res.sendFile(qrPath);
+    if (fs.existsSync(QR_FILE)) {
+      res.sendFile(QR_FILE);
     } else {
       res.status(404).send('QR code not found');
     }
@@ -44,11 +43,6 @@ async function start() {
     res.json({ isAuthenticated });
   });
 
-  const zalo = new Zalo({
-    selfListen: true,
-    checkUpdate: true
-  });
-
   const messageController = messageControllerFactory(zaloService, messageStore);
   const messageRoutes = messageRoutesFactory(messageController);
   app.use('/api', messageRoutes);
@@ -59,8 +53,8 @@ async function start() {
 
   const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
 
-  try {
-    console.log("Logging into Zalo...");
+  async function loginProcess() {
+    const zalo = new Zalo({ selfListen: true, checkUpdate: true });
 
     if (fs.existsSync(SESSION_FILE)) {
         console.log("Found session file, attempting to resume...");
@@ -73,34 +67,43 @@ async function start() {
             });
             isAuthenticated = true;
             console.log("Logged in successfully using saved session!");
+            if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
         } catch (e) {
-            console.error("Session login failed, falling back to QR:", e.message);
+            console.error("Session login failed:", e.message);
         }
     }
 
     if (!isAuthenticated) {
         console.log("Starting QR login...");
-        zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent }, (event) => {
-            if (event.type === "GotLoginInfo") {
-                try {
-                    fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
-                    console.log("Session saved to disk during login callback:", SESSION_FILE);
-                } catch (err) {
-                    console.error("Failed to save session to disk during login callback:", err.message);
+        try {
+            zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent }, (event) => {
+                if (event.type === "GotLoginInfo") {
+                    try {
+                        fs.writeFileSync(SESSION_FILE, JSON.stringify(event.data));
+                        console.log("Session saved to disk.");
+                    } catch (err) {
+                        console.error("Failed to save session:", err.message);
+                    }
                 }
-            }
-        });
-        isAuthenticated = true;
-        console.log("Logged in successfully via QR!");
+            });
+            isAuthenticated = true;
+            console.log("Logged in successfully via QR!");
+            if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
+        } catch (error) {
+            console.error("QR login failed:", error.message);
+            // Re-run loginProcess if it fails, ensuring QR is re-generated if missing
+            setTimeout(loginProcess, 5000);
+            return;
+        }
     }
 
     if (zaloApi) {
         zaloService.client = zaloApi;
         setupWebhook({ client: zaloApi }, messageStore);
     }
-  } catch (error) {
-    console.error("Failed to start Zalo client:", error);
   }
+
+  loginProcess();
 }
 
 start();
