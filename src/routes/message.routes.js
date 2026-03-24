@@ -86,6 +86,38 @@ const express = require('express');
  *                 : '#/components/schemas/Message'
  */
 
+/**
+ * @swagger
+ * /api/webhook-config:
+ *   get:
+ *     summary: Get webhook configuration
+ *     tags: [Config]
+ *     responses:
+ *       200:
+ *         description: Webhook configuration
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 webhookUrl:
+ *                   type: string
+ *   post:
+ *     summary: Update webhook configuration
+ *     tags: [Config]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               webhookUrl:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Webhook configuration updated
+ */
 
 module.exports = (controller) => {
   const router = express.Router();
@@ -93,6 +125,8 @@ module.exports = (controller) => {
   router.post('/send', controller.sendMessage);
   router.get('/groups', controller.getGroups);
   router.get('/messages', controller.getMessages);
+  router.get('/webhook-config', controller.getWebhookConfig);
+  router.post('/webhook-config', controller.updateWebhookConfig);
 
   return router;
 };
