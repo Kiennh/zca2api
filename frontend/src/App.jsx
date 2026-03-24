@@ -4,7 +4,7 @@ import { Input } from '@openai/apps-sdk-ui/components/Input';
 import { Textarea } from '@openai/apps-sdk-ui/components/Textarea';
 import { Select } from '@openai/apps-sdk-ui/components/Select';
 import { Badge } from '@openai/apps-sdk-ui/components/Badge';
-import { Send, RefreshCw, MessageSquare, Users } from 'lucide-react';
+import { Send, RefreshCw, MessageSquare, Users, FileText } from 'lucide-react';
 import { useZalo } from './hooks/useZalo';
 
 export default function App() {
@@ -56,7 +56,17 @@ export default function App() {
     <div className="max-w-3xl mx-auto py-8 px-4">
       <div className="flex flex-col gap-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Zalo Messaging</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold">Zalo Messaging</h1>
+            <a
+              href="/api-docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              <FileText size={16} /> API Docs
+            </a>
+          </div>
           <div className="flex gap-2">
             <Badge color={isAuthenticated ? 'green' : 'red'}>
               {isAuthenticated ? 'ONLINE' : 'OFFLINE'}
