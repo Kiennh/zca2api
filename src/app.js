@@ -18,8 +18,6 @@ async function start() {
   app.use(bodyParser.json());
   app.use(express.static(path.join(__dirname, '../dashboard')));
 
-  // Serve the root directory specifically for qr.png access if needed,
-  // but better to move qr.png or serve it explicitly.
   app.get('/qr.png', (req, res) => {
     res.sendFile(path.join(__dirname, '../qr.png'));
   });
@@ -29,22 +27,27 @@ async function start() {
     checkUpdate: true
   });
 
+  const zaloService = new ZaloService(zalo);
+  // We can't setup webhook yet because zalo.client might not be ready until login
+  // But we can define the API routes
+
+  const messageController = messageControllerFactory(zaloService, messageStore);
+  const messageRoutes = messageRoutesFactory(messageController);
+
+  app.use('/api', messageRoutes);
+
+  app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+    console.log(`Access the dashboard at http://localhost:${port} to scan the QR code.`);
+  });
+
   try {
     console.log("Logging into Zalo...");
     await zalo.loginQR();
     console.log("Logged in successfully!");
 
-    const zaloService = new ZaloService(zalo);
+    // Setup webhook after successful login
     setupWebhook(zalo, messageStore);
-
-    const messageController = messageControllerFactory(zaloService, messageStore);
-    const messageRoutes = messageRoutesFactory(messageController);
-
-    app.use('/api', messageRoutes);
-
-    app.listen(port, () => {
-      console.log(`Server is running on http://localhost:${port}`);
-    });
   } catch (error) {
     console.error("Failed to start Zalo client:", error);
   }
