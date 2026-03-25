@@ -4,7 +4,7 @@ import { Input } from '@openai/apps-sdk-ui/components/Input';
 import { Textarea } from '@openai/apps-sdk-ui/components/Textarea';
 import { Select } from '@openai/apps-sdk-ui/components/Select';
 import { Badge } from '@openai/apps-sdk-ui/components/Badge';
-import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe, Plus, List } from 'lucide-react';
+import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe, Plus, List, HelpCircle } from 'lucide-react';
 import { useZalo } from './hooks/useZalo';
 
 export default function App() {
@@ -79,11 +79,15 @@ export default function App() {
   };
 
   const handleAddAccount = async () => {
-    if (!newAccountId) return;
     try {
-      await addAccount(newAccountId);
+      const result = await addAccount(newAccountId);
       setNewAccountId('');
       setShowAddAccount(false);
+      // Auto-select the newly created account. Note: useZalo handles this partially,
+      // but let's be explicit if addAccount returns the final/current ID.
+      if (result && result.accountId) {
+        setCurrentAccountId(result.accountId);
+      }
     } catch (e) {
       alert('Failed to add account');
     }
@@ -104,12 +108,16 @@ export default function App() {
 
         {showAddAccount && (
           <div className="p-4 border-b border-gray-200 bg-gray-50 flex flex-col gap-2">
+            <label className="text-xs font-medium uppercase text-gray-500 flex items-center gap-1">
+              Account ID <span className="lowercase text-[10px]">(Optional)</span>
+            </label>
             <Input
               value={newAccountId}
               onChange={(e) => setNewAccountId(e.target.value)}
-              placeholder="Enter Account ID"
+              placeholder="Leave empty to auto-detect"
             />
             <Button onClick={handleAddAccount} variant="primary" size="sm">Add Account</Button>
+            <p className="text-[10px] text-gray-400">If empty, it will be named after login.</p>
           </div>
         )}
 
@@ -121,11 +129,13 @@ export default function App() {
               className={`p-4 cursor-pointer hover:bg-gray-50 flex flex-col gap-1 ${currentAccountId === acc.accountId ? 'bg-blue-50 border-r-4 border-blue-500' : ''}`}
             >
               <div className="flex justify-between items-center">
-                <span className="font-semibold truncate">{acc.accountId}</span>
+                <span className={`font-semibold truncate ${acc.accountId.startsWith('pending_') ? 'italic text-gray-400' : ''}`}>
+                  {acc.accountId}
+                </span>
                 <div className={`w-2 h-2 rounded-full ${acc.isAuthenticated ? 'bg-green-500' : 'bg-red-500'}`}></div>
               </div>
               <span className="text-xs text-gray-500">
-                {acc.isAuthenticated ? (acc.isListening ? 'Online' : 'Connected') : 'Offline'}
+                {acc.isAuthenticated ? (acc.isListening ? 'Online' : 'Connected') : (acc.accountId.startsWith('pending_') ? 'Waiting for Login...' : 'Offline')}
               </span>
             </div>
           ))}

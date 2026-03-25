@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export function useZalo() {
   const [accounts, setAccounts] = useState([]);
@@ -11,6 +11,11 @@ export function useZalo() {
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
+  const currentAccountIdRef = useRef(currentAccountId);
+  useEffect(() => {
+    currentAccountIdRef.current = currentAccountId;
+  }, [currentAccountId]);
+
   const loadAccounts = useCallback(async () => {
     setLoadingAccounts(true);
     try {
@@ -18,28 +23,42 @@ export function useZalo() {
       if (res.ok) {
         const data = await res.json();
         setAccounts(data);
-        if (data.length > 0 && !currentAccountId) {
+
+        // Handle account renaming case: if currentAccountId is no longer in the list,
+        // but it was a "pending_" account, it might have been renamed.
+        // Or if it was just renamed, we should find the one that replaced it.
+        // This is tricky without a persistent mapping, but we can assume if the list changes and our current is gone,
+        // we might want to pick the newest one or just let the user re-select.
+        // Actually, the server updates the list. If currentAccountIdRef is pending_ and it's gone,
+        // we could potentially look for a new non-pending account.
+
+        if (data.length > 0 && !currentAccountIdRef.current) {
           setCurrentAccountId(data[0].accountId);
+        } else if (currentAccountIdRef.current && !data.find(a => a.accountId === currentAccountIdRef.current)) {
+           // If current account is gone (renamed), let's see if we can find a new one that appeared.
+           // For now, let's just keep the last one or the first one if current is invalid.
+           // If we wanted to be smart, we'd compare the previous list with the new one.
         }
       }
     } catch (e) {
       console.error('Failed to load accounts', e);
     } finally {
-      setLoadingAccounts(true);
+      setLoadingAccounts(false);
     }
-  }, [currentAccountId]);
+  }, []);
 
   const addAccount = async (accountId) => {
     try {
       const res = await fetch('/api/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountId })
+        body: JSON.stringify({ accountId: accountId || undefined })
       });
       if (res.ok) {
+        const result = await res.json();
         await loadAccounts();
-        setCurrentAccountId(accountId);
-        return await res.json();
+        setCurrentAccountId(result.accountId);
+        return result;
       }
     } catch (e) {
       console.error('Failed to add account', e);
@@ -51,6 +70,11 @@ export function useZalo() {
     if (!currentAccountId) return;
     try {
       const res = await fetch(`/api/${currentAccountId}/auth-status`);
+      if (res.status === 404) {
+        // Account might have been renamed. Reload accounts list.
+        await loadAccounts();
+        return;
+      }
       const data = await res.json();
       setStatus({
         isAuthenticated: data.isAuthenticated,
@@ -59,7 +83,7 @@ export function useZalo() {
     } catch (e) {
       console.error('Failed to check auth status', e);
     }
-  }, [currentAccountId]);
+  }, [currentAccountId, loadAccounts]);
 
   const refreshQR = async () => {
     if (!currentAccountId) return;

@@ -73,8 +73,59 @@ async function start() {
     return account;
   }
 
+  async function renameAccount(oldId, newId) {
+    if (oldId === newId) return newId;
+    const account = accounts.get(oldId);
+    if (!account) return oldId;
+
+    // Check if newId already exists in accounts map
+    if (accounts.has(newId) && oldId !== newId) {
+      console.log(`Account ${newId} already exists. Merging session...`);
+      // For now, we just proceed with the old session but delete the old record if possible.
+      // But actually, it's safer to just switch to the existing one if it's already logged in.
+      // However, here we are in the middle of loginProcess for oldId.
+      // Let's just update the ID if the directory rename succeeds.
+    }
+
+    console.log(`Renaming account ${oldId} to ${newId}`);
+
+    const oldDir = account.accountDir;
+    const newDir = path.join(ACCOUNTS_DIR, newId);
+
+    if (fs.existsSync(newDir) && oldDir !== newDir) {
+      console.warn(`Target directory ${newId} already exists. Overwriting session info.`);
+      // Move files individually if rename fails due to existing dir
+      fs.copyFileSync(account.sessionFile, path.join(newDir, 'session.json'));
+      if (fs.existsSync(account.configFile)) fs.copyFileSync(account.configFile, path.join(newDir, 'config.json'));
+      if (fs.existsSync(account.messagesFile)) fs.copyFileSync(account.messagesFile, path.join(newDir, 'messages.json'));
+      // Remove old dir
+      try {
+        fs.rmSync(oldDir, { recursive: true, force: true });
+      } catch (e) {}
+    } else if (oldDir !== newDir) {
+      fs.renameSync(oldDir, newDir);
+    }
+
+    // Update account object properties
+    account.accountId = newId;
+    account.accountDir = newDir;
+    account.sessionFile = path.join(newDir, 'session.json');
+    account.configFile = path.join(newDir, 'config.json');
+    account.messagesFile = path.join(newDir, 'messages.json');
+    account.qrFile = path.join(newDir, 'qr.png');
+
+    account.configStore.filePath = account.configFile;
+    account.messageStore.filePath = account.messagesFile;
+    account.zaloService.sessionFile = account.sessionFile;
+
+    accounts.delete(oldId);
+    accounts.set(newId, account);
+
+    return newId;
+  }
+
   async function loginProcess(accountId) {
-    const account = accounts.get(accountId);
+    let account = accounts.get(accountId);
     if (!account) return;
 
     const zalo = new Zalo({ selfListen: true, checkUpdate: true });
@@ -133,7 +184,21 @@ async function start() {
 
     if (account.zaloApi) {
       account.zaloService.client = account.zaloApi;
-      setupWebhook(accountId, account.zaloService, account.messageStore, account.configStore, () => resetSession(accountId));
+
+      let currentId = account.accountId;
+      if (currentId.startsWith('pending_')) {
+        try {
+          const selfInfo = await account.zaloApi.getSelfInfo();
+          if (selfInfo && selfInfo.uid) {
+            const realUid = selfInfo.uid.toString();
+            currentId = await renameAccount(currentId, realUid);
+          }
+        } catch (e) {
+          console.error(`[${currentId}] Failed to get self info for renaming:`, e.message);
+        }
+      }
+
+      setupWebhook(currentId, account.zaloService, account.messageStore, account.configStore, () => resetSession(currentId));
     }
   }
 
@@ -186,8 +251,10 @@ async function start() {
   });
 
   app.post('/api/accounts', async (req, res) => {
-    const { accountId } = req.body;
-    if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+    let { accountId } = req.body;
+    if (!accountId) {
+      accountId = `pending_${Date.now()}`;
+    }
     if (accounts.has(accountId)) return res.status(400).json({ error: 'Account already exists' });
 
     await createAccount(accountId);
@@ -208,7 +275,6 @@ async function start() {
     const account = accounts.get(req.params.accountId);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    // Inject account into req for controllers if needed, but for now we'll use a dynamic router or similar
     req.account = account;
     next();
   });
