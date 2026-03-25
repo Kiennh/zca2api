@@ -78,15 +78,6 @@ async function start() {
     const account = accounts.get(oldId);
     if (!account) return oldId;
 
-    // Check if newId already exists in accounts map
-    if (accounts.has(newId) && oldId !== newId) {
-      console.log(`Account ${newId} already exists. Merging session...`);
-      // For now, we just proceed with the old session but delete the old record if possible.
-      // But actually, it's safer to just switch to the existing one if it's already logged in.
-      // However, here we are in the middle of loginProcess for oldId.
-      // Let's just update the ID if the directory rename succeeds.
-    }
-
     console.log(`Renaming account ${oldId} to ${newId}`);
 
     const oldDir = account.accountDir;
@@ -94,11 +85,9 @@ async function start() {
 
     if (fs.existsSync(newDir) && oldDir !== newDir) {
       console.warn(`Target directory ${newId} already exists. Overwriting session info.`);
-      // Move files individually if rename fails due to existing dir
       fs.copyFileSync(account.sessionFile, path.join(newDir, 'session.json'));
       if (fs.existsSync(account.configFile)) fs.copyFileSync(account.configFile, path.join(newDir, 'config.json'));
       if (fs.existsSync(account.messagesFile)) fs.copyFileSync(account.messagesFile, path.join(newDir, 'messages.json'));
-      // Remove old dir
       try {
         fs.rmSync(oldDir, { recursive: true, force: true });
       } catch (e) {}
@@ -106,7 +95,6 @@ async function start() {
       fs.renameSync(oldDir, newDir);
     }
 
-    // Update account object properties
     account.accountId = newId;
     account.accountDir = newDir;
     account.sessionFile = path.join(newDir, 'session.json');
@@ -241,6 +229,29 @@ async function start() {
     }
   }
 
+/**
+ * @swagger
+ * /api/accounts:
+ *   get:
+ *     summary: List all accounts
+ *     tags: [Accounts]
+ *     responses:
+ *       200:
+ *         description: List of accounts with status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   accountId:
+ *                     type: string
+ *                   isAuthenticated:
+ *                     type: boolean
+ *                   isListening:
+ *                     type: boolean
+ */
   app.get('/api/accounts', (req, res) => {
     const list = Array.from(accounts.values()).map(acc => ({
       accountId: acc.accountId,
@@ -250,6 +261,24 @@ async function start() {
     res.json(list);
   });
 
+/**
+ * @swagger
+ * /api/accounts:
+ *   post:
+ *     summary: Create a new account
+ *     tags: [Accounts]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               accountId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Account created successfully
+ */
   app.post('/api/accounts', async (req, res) => {
     let { accountId } = req.body;
     if (!accountId) {
@@ -262,6 +291,27 @@ async function start() {
     res.json({ success: true, accountId });
   });
 
+/**
+ * @swagger
+ * /qr/{accountId}.png:
+ *   get:
+ *     summary: Get login QR code for account
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: QR code image
+ *         content:
+ *           image/png:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
   app.get('/qr/:accountId.png', (req, res) => {
     const account = accounts.get(req.params.accountId);
     if (account && fs.existsSync(account.qrFile)) {
@@ -279,7 +329,22 @@ async function start() {
     next();
   });
 
-  // Dynamic routes based on account
+/**
+ * @swagger
+ * /api/{accountId}/auth-status:
+ *   get:
+ *     summary: Get auth status for account
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Auth status
+ */
   app.get('/api/:accountId/auth-status', (req, res) => {
     const account = req.account;
     if (!account.isAuthenticated && !fs.existsSync(account.qrFile) && account.qrActions) {
@@ -292,6 +357,22 @@ async function start() {
     });
   });
 
+/**
+ * @swagger
+ * /api/{accountId}/refresh-qr:
+ *   post:
+ *     summary: Refresh QR code for account
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Success or failure message
+ */
   app.post('/api/:accountId/refresh-qr', (req, res) => {
     const account = req.account;
     if (account.isAuthenticated) return res.json({ success: false, message: "Already authenticated" });
@@ -304,10 +385,117 @@ async function start() {
     }
   });
 
+/**
+ * @swagger
+ * /api/{accountId}/send:
+ *   post:
+ *     summary: Send message
+ *     tags: [Messages]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               text:
+ *                 type: string
+ *               threadId:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *                 enum: [user, group]
+ *     responses:
+ *       200:
+ *         description: Message sent
+ */
   app.post('/api/:accountId/send', (req, res) => req.account.controller.sendMessage(req, res));
+
+/**
+ * @swagger
+ * /api/{accountId}/groups:
+ *   get:
+ *     summary: Get groups
+ *     tags: [Messages]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of groups
+ */
   app.get('/api/:accountId/groups', (req, res) => req.account.controller.getGroups(req, res));
+
+/**
+ * @swagger
+ * /api/{accountId}/messages:
+ *   get:
+ *     summary: Get messages
+ *     tags: [Messages]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of messages
+ */
   app.get('/api/:accountId/messages', (req, res) => req.account.controller.getMessages(req, res));
+
+/**
+ * @swagger
+ * /api/{accountId}/webhook-config:
+ *   get:
+ *     summary: Get webhook config
+ *     tags: [Config]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Webhook config
+ */
   app.get('/api/:accountId/webhook-config', (req, res) => req.account.controller.getWebhookConfig(req, res));
+
+/**
+ * @swagger
+ * /api/{accountId}/webhook-config:
+ *   post:
+ *     summary: Update webhook config
+ *     tags: [Config]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               webhookUrl:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Webhook config updated
+ */
   app.post('/api/:accountId/webhook-config', (req, res) => req.account.controller.updateWebhookConfig(req, res));
 
   app.listen(port, () => {
