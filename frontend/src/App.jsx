@@ -4,7 +4,7 @@ import { Input } from '@openai/apps-sdk-ui/components/Input';
 import { Textarea } from '@openai/apps-sdk-ui/components/Textarea';
 import { Select } from '@openai/apps-sdk-ui/components/Select';
 import { Badge } from '@openai/apps-sdk-ui/components/Badge';
-import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe, Plus, List, LogIn, Trash2 } from 'lucide-react';
+import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe, Plus, List, LogIn, Trash2, X } from 'lucide-react';
 import { useZalo } from './hooks/useZalo';
 
 export default function App() {
@@ -93,11 +93,13 @@ export default function App() {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!currentAccountId) return;
-    if (confirm(`Are you sure you want to delete account ${currentAccountId}? All data will be lost.`)) {
+  const handleDeleteAccount = async (id, e) => {
+    if (e) e.stopPropagation();
+    const accountToDelete = id || currentAccountId;
+    if (!accountToDelete) return;
+    if (confirm(`Are you sure you want to delete account ${accountToDelete}? All data will be lost.`)) {
       try {
-        await deleteAccount(currentAccountId);
+        await deleteAccount(accountToDelete);
       } catch (e) {
         alert('Failed to delete account');
       }
@@ -148,17 +150,24 @@ export default function App() {
             <div
               key={acc.accountId}
               onClick={() => setCurrentAccountId(acc.accountId)}
-              className={`p-4 cursor-pointer hover:bg-gray-50 flex flex-col gap-1 ${currentAccountId === acc.accountId ? 'bg-blue-50 border-r-4 border-blue-500' : ''}`}
+              className={`p-4 cursor-pointer hover:bg-gray-50 flex flex-col gap-1 relative group ${currentAccountId === acc.accountId ? 'bg-blue-50 border-r-4 border-blue-500' : ''}`}
             >
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center pr-6">
                 <span className={`font-semibold truncate ${acc.accountId.startsWith('pending_') ? 'italic text-gray-400' : ''}`}>
                   {acc.accountId}
                 </span>
                 <div className={`w-2 h-2 rounded-full ${acc.isAuthenticated ? 'bg-green-500' : 'bg-red-500'}`}></div>
               </div>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500 pr-6">
                 {acc.isAuthenticated ? (acc.isListening ? 'Online' : 'Connected') : (acc.accountId.startsWith('pending_') ? 'Waiting for Login...' : 'Offline')}
               </span>
+              <button
+                onClick={(e) => handleDeleteAccount(acc.accountId, e)}
+                className="absolute top-4 right-2 p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Delete Account"
+              >
+                <X size={14} />
+              </button>
             </div>
           ))}
         </div>
@@ -202,7 +211,7 @@ export default function App() {
                     <Button variant="secondary" size="sm" onClick={handleReLogin}>
                        <LogIn size={14} className="mr-1 inline" /> Re-login
                     </Button>
-                    <Button variant="red" size="sm" onClick={handleDeleteAccount}>
+                    <Button variant="red" size="sm" onClick={(e) => handleDeleteAccount(null, e)}>
                        <Trash2 size={14} className="mr-1 inline" /> Delete Account
                     </Button>
                 </div>
