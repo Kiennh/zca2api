@@ -1,2 +1,4 @@
 node_modules/
 sessions/
+*.log
+/home/jules/verification/
