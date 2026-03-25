@@ -4,7 +4,7 @@ import { Input } from '@openai/apps-sdk-ui/components/Input';
 import { Textarea } from '@openai/apps-sdk-ui/components/Textarea';
 import { Select } from '@openai/apps-sdk-ui/components/Select';
 import { Badge } from '@openai/apps-sdk-ui/components/Badge';
-import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe, Plus, List, HelpCircle } from 'lucide-react';
+import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe, Plus, List, LogIn, Trash2 } from 'lucide-react';
 import { useZalo } from './hooks/useZalo';
 
 export default function App() {
@@ -13,6 +13,8 @@ export default function App() {
     currentAccountId,
     setCurrentAccountId,
     addAccount,
+    deleteAccount,
+    reLogin,
     isAuthenticated, 
     isListening,
     groups, 
@@ -83,13 +85,33 @@ export default function App() {
       const result = await addAccount(newAccountId);
       setNewAccountId('');
       setShowAddAccount(false);
-      // Auto-select the newly created account. Note: useZalo handles this partially,
-      // but let's be explicit if addAccount returns the final/current ID.
       if (result && result.accountId) {
         setCurrentAccountId(result.accountId);
       }
     } catch (e) {
       alert('Failed to add account');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!currentAccountId) return;
+    if (confirm(`Are you sure you want to delete account ${currentAccountId}? All data will be lost.`)) {
+      try {
+        await deleteAccount(currentAccountId);
+      } catch (e) {
+        alert('Failed to delete account');
+      }
+    }
+  };
+
+  const handleReLogin = async () => {
+    if (!currentAccountId) return;
+    if (confirm(`Reset session and re-login for ${currentAccountId}?`)) {
+      try {
+        await reLogin(currentAccountId);
+      } catch (e) {
+        alert('Failed to restart login process');
+      }
     }
   };
 
@@ -171,10 +193,23 @@ export default function App() {
             </div>
 
             <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col gap-4">
-              <div className="flex items-center gap-2">
-                <Settings size={20} className="text-blue-600" />
-                <h3 className="text-lg font-semibold">Configuration</h3>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Settings size={20} className="text-blue-600" />
+                  <h3 className="text-lg font-semibold">Account Actions</h3>
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={handleReLogin}>
+                       <LogIn size={14} className="mr-1 inline" /> Re-login
+                    </Button>
+                    <Button variant="red" size="sm" onClick={handleDeleteAccount}>
+                       <Trash2 size={14} className="mr-1 inline" /> Delete Account
+                    </Button>
+                </div>
               </div>
+
+              <hr className="border-gray-100" />
+
               <div className="flex flex-col gap-3">
                 <label className="text-sm font-medium mb-1 block flex items-center gap-2">
                   <Globe size={14} /> Webhook URL (POST messages to this URL)

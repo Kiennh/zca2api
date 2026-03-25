@@ -24,20 +24,19 @@ export function useZalo() {
         const data = await res.json();
         setAccounts(data);
 
-        // Handle account renaming case: if currentAccountId is no longer in the list,
-        // but it was a "pending_" account, it might have been renamed.
-        // Or if it was just renamed, we should find the one that replaced it.
-        // This is tricky without a persistent mapping, but we can assume if the list changes and our current is gone,
-        // we might want to pick the newest one or just let the user re-select.
-        // Actually, the server updates the list. If currentAccountIdRef is pending_ and it's gone,
-        // we could potentially look for a new non-pending account.
-
         if (data.length > 0 && !currentAccountIdRef.current) {
           setCurrentAccountId(data[0].accountId);
         } else if (currentAccountIdRef.current && !data.find(a => a.accountId === currentAccountIdRef.current)) {
-           // If current account is gone (renamed), let's see if we can find a new one that appeared.
-           // For now, let's just keep the last one or the first one if current is invalid.
-           // If we wanted to be smart, we'd compare the previous list with the new one.
+           // If current account was deleted, switch to the first available or null
+           if (data.length > 0) {
+             setCurrentAccountId(data[0].accountId);
+           } else {
+             setCurrentAccountId(null);
+             setStatus({ isAuthenticated: false, isListening: false });
+             setGroups([]);
+             setMessages([]);
+             setWebhookUrl('');
+           }
         }
       }
     } catch (e) {
@@ -66,12 +65,37 @@ export function useZalo() {
     }
   };
 
+  const deleteAccount = async (accountId) => {
+    if (!accountId) return;
+    try {
+      const res = await fetch(`/api/${accountId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await loadAccounts();
+      }
+    } catch (e) {
+      console.error('Failed to delete account', e);
+      throw e;
+    }
+  };
+
+  const reLogin = async (accountId) => {
+    if (!accountId) return;
+    try {
+      const res = await fetch(`/api/${accountId}/re-login`, { method: 'POST' });
+      if (res.ok) {
+        await checkAuthStatus();
+      }
+    } catch (e) {
+      console.error('Failed to re-login', e);
+      throw e;
+    }
+  };
+
   const checkAuthStatus = useCallback(async () => {
     if (!currentAccountId) return;
     try {
       const res = await fetch(`/api/${currentAccountId}/auth-status`);
       if (res.status === 404) {
-        // Account might have been renamed. Reload accounts list.
         await loadAccounts();
         return;
       }
@@ -183,6 +207,11 @@ export function useZalo() {
       loadGroups();
       loadMessages();
       loadWebhookConfig();
+    } else {
+       setStatus({ isAuthenticated: false, isListening: false });
+       setGroups([]);
+       setMessages([]);
+       setWebhookUrl('');
     }
   }, [currentAccountId, checkAuthStatus, loadGroups, loadMessages, loadWebhookConfig]);
 
@@ -203,6 +232,8 @@ export function useZalo() {
     currentAccountId,
     setCurrentAccountId,
     addAccount,
+    deleteAccount,
+    reLogin,
     isAuthenticated: status.isAuthenticated,
     isListening: status.isListening,
     groups,

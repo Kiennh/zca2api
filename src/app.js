@@ -194,7 +194,7 @@ async function start() {
     const account = accounts.get(accountId);
     if (!account || account.isResetting) return;
     account.isResetting = true;
-    console.log(`!!! [${accountId}] Resetting session due to listener failure...`);
+    console.log(`!!! [${accountId}] Resetting session due to failure or manual request...`);
 
     account.isAuthenticated = false;
     account.zaloService.isListening = false;
@@ -327,6 +327,68 @@ async function start() {
 
     req.account = account;
     next();
+  });
+
+/**
+ * @swagger
+ * /api/{accountId}:
+ *   delete:
+ *     summary: Delete account and all its data
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Account deleted
+ */
+  app.delete('/api/:accountId', async (req, res) => {
+    const accountId = req.params.accountId;
+    const account = req.account;
+
+    console.log(`Deleting account ${accountId}`);
+
+    // Stop listener and cleanup memory
+    if (account.zaloApi && account.zaloApi.listener) {
+      try {
+        account.zaloApi.listener.stop();
+      } catch (e) {}
+    }
+
+    accounts.delete(accountId);
+
+    // Delete files
+    try {
+      fs.rmSync(account.accountDir, { recursive: true, force: true });
+    } catch (e) {
+      console.error(`Failed to delete account directory for ${accountId}:`, e.message);
+    }
+
+    res.json({ success: true });
+  });
+
+/**
+ * @swagger
+ * /api/{accountId}/re-login:
+ *   post:
+ *     summary: Force re-login for account
+ *     tags: [Accounts]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Login process restarted
+ */
+  app.post('/api/:accountId/re-login', (req, res) => {
+    resetSession(req.params.accountId);
+    res.json({ success: true, message: "Login process restarted" });
   });
 
 /**
