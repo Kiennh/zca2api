@@ -36,13 +36,32 @@ module.exports = (zaloService, messageStore, configStore) => {
     },
 
     getWebhookConfig: (req, res) => {
-      res.json({ webhookUrl: configStore.getWebhookUrl() });
+      res.json({
+        webhookUrl: configStore.getWebhookUrl(),
+        secretToken: configStore.getSecretToken()
+      });
     },
 
     updateWebhookConfig: (req, res) => {
-      const { webhookUrl } = req.body;
-      configStore.setWebhookUrl(webhookUrl);
-      res.json({ success: true, webhookUrl: configStore.getWebhookUrl() });
+      const { webhookUrl, secretToken } = req.body;
+
+      if (secretToken && secretToken.length < 8) {
+        return res.status(400).json({ error: 'Secret token must be at least 8 characters long' });
+      }
+
+      if (webhookUrl !== undefined) {
+        configStore.setWebhookUrl(webhookUrl);
+      }
+
+      if (secretToken !== undefined) {
+        configStore.setSecretToken(secretToken);
+      }
+
+      res.json({
+        success: true,
+        webhookUrl: configStore.getWebhookUrl(),
+        secretToken: configStore.getSecretToken()
+      });
     }
   };
 };

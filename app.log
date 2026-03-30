@@ -2,16 +2,11 @@
 > app@1.0.0 start
 > node src/app.js
 
-Starting QR login...
-
 Server is running on http://localhost:3001
-[34mINFO[0m Got login version: 5.6.1
-QR Code generated, saving to file...
-[34mINFO[0m Scan the QR code at '/app/sessions/qr.png' to proceed with login
-[34mINFO[0m QR expired!
-QR login failed: Cannot get scan result
-Starting QR login...
+[test_account] loading account /app/sessions/accounts/test_account/session.json
+[test_account] Starting QR login...
+[test_account] Selected random User Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
 
 [34mINFO[0m Got login version: 5.6.1
-QR Code generated, saving to file...
-[34mINFO[0m Scan the QR code at '/app/sessions/qr.png' to proceed with login
+[test_account] QR Code generated, saving to file...
+[34mINFO[0m Scan the QR code at '/app/sessions/accounts/test_account/qr.png' to proceed with login

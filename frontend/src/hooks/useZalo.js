@@ -7,6 +7,7 @@ export function useZalo() {
   const [groups, setGroups] = useState([]);
   const [messages, setMessages] = useState([]);
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [secretToken, setSecretToken] = useState('');
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -36,6 +37,7 @@ export function useZalo() {
              setGroups([]);
              setMessages([]);
              setWebhookUrl('');
+             setSecretToken('');
            }
         }
       }
@@ -172,24 +174,29 @@ export function useZalo() {
       if (res.ok) {
         const data = await res.json();
         setWebhookUrl(data.webhookUrl || '');
+        setSecretToken(data.secretToken || '');
       }
     } catch (e) {
       console.error('Failed to load webhook config', e);
     }
   }, [currentAccountId]);
 
-  const updateWebhookConfig = async (url) => {
+  const updateWebhookConfig = async (url, token) => {
     if (!currentAccountId) return;
     try {
       const res = await fetch(`/api/${currentAccountId}/webhook-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl: url })
+        body: JSON.stringify({ webhookUrl: url, secretToken: token })
       });
       if (res.ok) {
         const data = await res.json();
-        setWebhookUrl(data.webhookUrl);
+        setWebhookUrl(data.webhookUrl || '');
+        setSecretToken(data.secretToken || '');
         return data;
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update webhook config');
       }
     } catch (e) {
       console.error('Failed to update webhook config', e);
@@ -212,6 +219,7 @@ export function useZalo() {
        setGroups([]);
        setMessages([]);
        setWebhookUrl('');
+       setSecretToken('');
     }
   }, [currentAccountId, checkAuthStatus, loadGroups, loadMessages, loadWebhookConfig]);
 
@@ -239,6 +247,7 @@ export function useZalo() {
     groups,
     messages,
     webhookUrl,
+    secretToken,
     loadingGroups,
     loadingMessages,
     refreshQR,
