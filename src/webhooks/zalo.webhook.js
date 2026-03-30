@@ -45,11 +45,13 @@ module.exports = (accountId, zaloService, messageStore, configStore, onFailure) 
           };
 
           console.log(`Forwarding to webhook [${accountId}]: ${webhookUrl}`);
-          await fetch(webhookUrl, {
+          const response = await fetch(webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formatted)
           });
+          const responseBody = await response.text();
+          console.log(`Webhook response [${accountId}]: ${response.status} ${responseBody}`);
         } catch (error) {
           console.error(`Failed to forward to webhook [${accountId}]: ${error.message}`);
         }

@@ -15,7 +15,15 @@ const messageControllerFactory = require('./controllers/message.controller');
 const messageRoutesFactory = require('./routes/message.routes');
 
 const ACCOUNTS_DIR = path.join(__dirname, '../sessions/accounts');
-const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
+const userAgents = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+];
+
+const getRandomUserAgent = () => userAgents[Math.floor(Math.random() * userAgents.length)];
 
 const accounts = new Map();
 
@@ -90,7 +98,7 @@ async function start() {
       if (fs.existsSync(account.messagesFile)) fs.copyFileSync(account.messagesFile, path.join(newDir, 'messages.json'));
       try {
         fs.rmSync(oldDir, { recursive: true, force: true });
-      } catch (e) {}
+      } catch (e) { }
     } else if (oldDir !== newDir) {
       fs.renameSync(oldDir, newDir);
     }
@@ -115,21 +123,21 @@ async function start() {
   async function loginProcess(accountId) {
     let account = accounts.get(accountId);
     if (!account) return;
-
+    console.log(`[${accountId}] loading account ${account.sessionFile}`);
     const zalo = new Zalo({ selfListen: true, checkUpdate: true });
 
     if (fs.existsSync(account.sessionFile)) {
+      account.isAuthenticated = true;
       console.log(`[${accountId}] Found session file, attempting to resume...`);
       try {
         const sessionData = JSON.parse(fs.readFileSync(account.sessionFile, 'utf8'));
         account.zaloApi = await zalo.login({
           cookie: sessionData.cookie,
           imei: sessionData.imei,
-          userAgent: sessionData.userAgent || defaultUserAgent
+          userAgent: sessionData.userAgent || getRandomUserAgent()
         });
         account.isAuthenticated = true;
         console.log(`[${accountId}] Logged in successfully using saved session!`);
-        if (fs.existsSync(account.qrFile)) fs.unlinkSync(account.qrFile);
         account.qrActions = null;
       } catch (e) {
         console.error(`[${accountId}] Session login failed:`, e.message);
@@ -139,7 +147,9 @@ async function start() {
     if (!account.isAuthenticated) {
       console.log(`[${accountId}] Starting QR login...`);
       try {
-        account.zaloApi = await zalo.loginQR({ userAgent: defaultUserAgent, qrPath: account.qrFile }, (event) => {
+        const selectedUserAgent = getRandomUserAgent();
+        console.log(`[${accountId}] Selected random User Agent: ${selectedUserAgent}`);
+        account.zaloApi = await zalo.loginQR({ userAgent: selectedUserAgent, qrPath: account.qrFile }, (event) => {
           if (event.actions) {
             account.qrActions = event.actions;
           }
@@ -151,7 +161,8 @@ async function start() {
 
           if (event.type === 4) { // GotLoginInfo
             try {
-              fs.writeFileSync(account.sessionFile, JSON.stringify(event.data));
+              const sessionData = { ...event.data, userAgent: selectedUserAgent };
+              fs.writeFileSync(account.sessionFile, JSON.stringify(sessionData));
               console.log(`[${accountId}] Session saved to disk.`);
             } catch (err) {
               console.error(`[${accountId}] Failed to save session:`, err.message);
@@ -160,7 +171,6 @@ async function start() {
         });
         account.isAuthenticated = true;
         console.log(`[${accountId}] Logged in successfully via QR!`);
-        if (fs.existsSync(account.qrFile)) fs.unlinkSync(account.qrFile);
         account.qrActions = null;
       } catch (error) {
         console.error(`[${accountId}] QR login failed:`, error.message);
@@ -185,7 +195,7 @@ async function start() {
           console.error(`[${currentId}] Failed to get self info for renaming:`, e.message);
         }
       }
-
+      console.log(`[${currentId}] setup webhook and reset session ${currentId}`)
       setupWebhook(currentId, account.zaloService, account.messageStore, account.configStore, () => resetSession(currentId));
     }
   }
@@ -213,7 +223,7 @@ async function start() {
     if (fs.existsSync(account.qrFile)) {
       try {
         fs.unlinkSync(account.qrFile);
-      } catch (err) {}
+      } catch (err) { }
     }
 
     account.isResetting = false;
@@ -229,29 +239,29 @@ async function start() {
     }
   }
 
-/**
- * @swagger
- * /api/accounts:
- *   get:
- *     summary: List all accounts
- *     tags: [Accounts]
- *     responses:
- *       200:
- *         description: List of accounts with status
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   accountId:
- *                     type: string
- *                   isAuthenticated:
- *                     type: boolean
- *                   isListening:
- *                     type: boolean
- */
+  /**
+   * @swagger
+   * /api/accounts:
+   *   get:
+   *     summary: List all accounts
+   *     tags: [Accounts]
+   *     responses:
+   *       200:
+   *         description: List of accounts with status
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 type: object
+   *                 properties:
+   *                   accountId:
+   *                     type: string
+   *                   isAuthenticated:
+   *                     type: boolean
+   *                   isListening:
+   *                     type: boolean
+   */
   app.get('/api/accounts', (req, res) => {
     const list = Array.from(accounts.values()).map(acc => ({
       accountId: acc.accountId,
@@ -261,24 +271,24 @@ async function start() {
     res.json(list);
   });
 
-/**
- * @swagger
- * /api/accounts:
- *   post:
- *     summary: Create a new account
- *     tags: [Accounts]
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               accountId:
- *                 type: string
- *     responses:
- *       200:
- *         description: Account created successfully
- */
+  /**
+   * @swagger
+   * /api/accounts:
+   *   post:
+   *     summary: Create a new account
+   *     tags: [Accounts]
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               accountId:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Account created successfully
+   */
   app.post('/api/accounts', async (req, res) => {
     let { accountId } = req.body;
     if (!accountId) {
@@ -291,27 +301,27 @@ async function start() {
     res.json({ success: true, accountId });
   });
 
-/**
- * @swagger
- * /qr/{accountId}.png:
- *   get:
- *     summary: Get login QR code for account
- *     tags: [Accounts]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: QR code image
- *         content:
- *           image/png:
- *             schema:
- *               type: string
- *               format: binary
- */
+  /**
+   * @swagger
+   * /qr/{accountId}.png:
+   *   get:
+   *     summary: Get login QR code for account
+   *     tags: [Accounts]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: QR code image
+   *         content:
+   *           image/png:
+   *             schema:
+   *               type: string
+   *               format: binary
+   */
   app.get('/qr/:accountId.png', (req, res) => {
     const account = accounts.get(req.params.accountId);
     if (account && fs.existsSync(account.qrFile)) {
@@ -329,22 +339,22 @@ async function start() {
     next();
   });
 
-/**
- * @swagger
- * /api/{accountId}:
- *   delete:
- *     summary: Delete account and all its data
- *     tags: [Accounts]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Account deleted
- */
+  /**
+   * @swagger
+   * /api/{accountId}:
+   *   delete:
+   *     summary: Delete account and all its data
+   *     tags: [Accounts]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Account deleted
+   */
   app.delete('/api/:accountId', async (req, res) => {
     const accountId = req.params.accountId;
     const account = req.account;
@@ -355,7 +365,7 @@ async function start() {
     if (account.zaloApi && account.zaloApi.listener) {
       try {
         account.zaloApi.listener.stop();
-      } catch (e) {}
+      } catch (e) { }
     }
 
     accounts.delete(accountId);
@@ -370,43 +380,44 @@ async function start() {
     res.json({ success: true });
   });
 
-/**
- * @swagger
- * /api/{accountId}/re-login:
- *   post:
- *     summary: Force re-login for account
- *     tags: [Accounts]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Login process restarted
- */
+  /**
+   * @swagger
+   * /api/{accountId}/re-login:
+   *   post:
+   *     summary: Force re-login for account
+   *     tags: [Accounts]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Login process restarted
+   */
   app.post('/api/:accountId/re-login', (req, res) => {
+    console.log(`[${req.params.accountId}] Re-login requested`);
     resetSession(req.params.accountId);
     res.json({ success: true, message: "Login process restarted" });
   });
 
-/**
- * @swagger
- * /api/{accountId}/auth-status:
- *   get:
- *     summary: Get auth status for account
- *     tags: [Accounts]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Auth status
- */
+  /**
+   * @swagger
+   * /api/{accountId}/auth-status:
+   *   get:
+   *     summary: Get auth status for account
+   *     tags: [Accounts]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Auth status
+   */
   app.get('/api/:accountId/auth-status', (req, res) => {
     const account = req.account;
     if (!account.isAuthenticated && !fs.existsSync(account.qrFile) && account.qrActions) {
@@ -419,22 +430,22 @@ async function start() {
     });
   });
 
-/**
- * @swagger
- * /api/{accountId}/refresh-qr:
- *   post:
- *     summary: Refresh QR code for account
- *     tags: [Accounts]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Success or failure message
- */
+  /**
+   * @swagger
+   * /api/{accountId}/refresh-qr:
+   *   post:
+   *     summary: Refresh QR code for account
+   *     tags: [Accounts]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Success or failure message
+   */
   app.post('/api/:accountId/refresh-qr', (req, res) => {
     const account = req.account;
     if (account.isAuthenticated) return res.json({ success: false, message: "Already authenticated" });
@@ -447,124 +458,124 @@ async function start() {
     }
   });
 
-/**
- * @swagger
- * /api/{accountId}/send:
- *   post:
- *     summary: Send message
- *     tags: [Messages]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               text:
- *                 type: string
- *               threadId:
- *                 type: string
- *               type:
- *                 type: string
- *                 enum: [user, group]
- *     responses:
- *       200:
- *         description: Message sent
- */
+  /**
+   * @swagger
+   * /api/{accountId}/send:
+   *   post:
+   *     summary: Send message
+   *     tags: [Messages]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               text:
+   *                 type: string
+   *               threadId:
+   *                 type: string
+   *               type:
+   *                 type: string
+   *                 enum: [user, group]
+   *     responses:
+   *       200:
+   *         description: Message sent
+   */
   app.post('/api/:accountId/send', (req, res) => req.account.controller.sendMessage(req, res));
 
-/**
- * @swagger
- * /api/{accountId}/groups:
- *   get:
- *     summary: Get groups
- *     tags: [Messages]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: List of groups
- */
+  /**
+   * @swagger
+   * /api/{accountId}/groups:
+   *   get:
+   *     summary: Get groups
+   *     tags: [Messages]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: List of groups
+   */
   app.get('/api/:accountId/groups', (req, res) => req.account.controller.getGroups(req, res));
 
-/**
- * @swagger
- * /api/{accountId}/messages:
- *   get:
- *     summary: Get messages
- *     tags: [Messages]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: List of messages
- */
+  /**
+   * @swagger
+   * /api/{accountId}/messages:
+   *   get:
+   *     summary: Get messages
+   *     tags: [Messages]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: List of messages
+   */
   app.get('/api/:accountId/messages', (req, res) => req.account.controller.getMessages(req, res));
 
-/**
- * @swagger
- * /api/{accountId}/webhook-config:
- *   get:
- *     summary: Get webhook config
- *     tags: [Config]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Webhook config
- */
+  /**
+   * @swagger
+   * /api/{accountId}/webhook-config:
+   *   get:
+   *     summary: Get webhook config
+   *     tags: [Config]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Webhook config
+   */
   app.get('/api/:accountId/webhook-config', (req, res) => req.account.controller.getWebhookConfig(req, res));
 
-/**
- * @swagger
- * /api/{accountId}/webhook-config:
- *   post:
- *     summary: Update webhook config
- *     tags: [Config]
- *     parameters:
- *       - in: path
- *         name: accountId
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               webhookUrl:
- *                 type: string
- *     responses:
- *       200:
- *         description: Webhook config updated
- */
+  /**
+   * @swagger
+   * /api/{accountId}/webhook-config:
+   *   post:
+   *     summary: Update webhook config
+   *     tags: [Config]
+   *     parameters:
+   *       - in: path
+   *         name: accountId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               webhookUrl:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Webhook config updated
+   */
   app.post('/api/:accountId/webhook-config', (req, res) => req.account.controller.updateWebhookConfig(req, res));
 
   app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
   });
 
-  setInterval(() => {}, 3600000);
+  setInterval(() => { }, 3600000);
 }
 
 start();
