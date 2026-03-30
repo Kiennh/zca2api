@@ -541,6 +541,15 @@ async function start() {
    *     responses:
    *       200:
    *         description: Webhook config
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 webhookUrl:
+   *                   type: string
+   *                 secretToken:
+   *                   type: string
    */
   app.get('/api/:accountId/webhook-config', (req, res) => req.account.controller.getWebhookConfig(req, res));
 
@@ -565,9 +574,20 @@ async function start() {
    *             properties:
    *               webhookUrl:
    *                 type: string
+   *               secretToken:
+   *                 type: string
    *     responses:
    *       200:
-   *         description: Webhook config updated
+   *         description: Webhook config
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 webhookUrl:
+   *                   type: string
+   *                 secretToken:
+   *                   type: string updated
    */
   app.post('/api/:accountId/webhook-config', (req, res) => req.account.controller.updateWebhookConfig(req, res));
 

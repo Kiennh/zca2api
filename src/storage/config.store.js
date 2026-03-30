@@ -4,7 +4,7 @@ const path = require('path');
 class ConfigStore {
   constructor(filePath) {
     this.filePath = filePath;
-    this.config = { webhookUrl: '' };
+    this.config = { webhookUrl: '', secretToken: '' };
     this.load();
   }
 
@@ -37,6 +37,15 @@ class ConfigStore {
 
   setWebhookUrl(url) {
     this.config.webhookUrl = url;
+    this.save();
+  }
+
+  getSecretToken() {
+    return this.config.secretToken;
+  }
+
+  setSecretToken(token) {
+    this.config.secretToken = token;
     this.save();
   }
 }
