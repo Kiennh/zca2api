@@ -44,10 +44,16 @@ module.exports = (accountId, zaloService, messageStore, configStore, onFailure) 
             raw: msg
           };
 
+          const secretToken = configStore.getSecretToken();
+          const headers = { 'Content-Type': 'application/json' };
+          if (secretToken) {
+            headers['Authorization'] = `Bearer ${secretToken}`;
+          }
+
           console.log(`Forwarding to webhook [${accountId}]: ${webhookUrl}`);
           const response = await fetch(webhookUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(formatted)
           });
           const responseBody = await response.text();

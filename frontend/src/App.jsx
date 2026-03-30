@@ -4,7 +4,7 @@ import { Input } from '@openai/apps-sdk-ui/components/Input';
 import { Textarea } from '@openai/apps-sdk-ui/components/Textarea';
 import { Select } from '@openai/apps-sdk-ui/components/Select';
 import { Badge } from '@openai/apps-sdk-ui/components/Badge';
-import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe, Plus, List, LogIn, Trash2, X } from 'lucide-react';
+import { Send, RefreshCw, MessageSquare, Users, FileText, Settings, Globe, Plus, List, LogIn, Trash2, X, Lock } from 'lucide-react';
 import { useZalo } from './hooks/useZalo';
 
 export default function App() {
@@ -20,6 +20,7 @@ export default function App() {
     groups, 
     messages, 
     webhookUrl,
+    secretToken,
     loadingGroups, 
     refreshQR, 
     loadGroups, 
@@ -33,6 +34,7 @@ export default function App() {
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [localWebhookUrl, setLocalWebhookUrl] = useState('');
+  const [localSecretToken, setLocalSecretToken] = useState('');
   const [isUpdatingWebhook, setIsUpdatingWebhook] = useState(false);
   const [newAccountId, setNewAccountId] = useState('');
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -40,6 +42,10 @@ export default function App() {
   useEffect(() => {
     setLocalWebhookUrl(webhookUrl);
   }, [webhookUrl]);
+
+  useEffect(() => {
+    setLocalSecretToken(secretToken);
+  }, [secretToken]);
 
   const groupOptions = useMemo(() => {
     return groups.map(g => ({
@@ -69,12 +75,17 @@ export default function App() {
   };
 
   const handleUpdateWebhook = async () => {
+    if (localSecretToken && localSecretToken.length < 8) {
+      alert('Secret token must be at least 8 characters long');
+      return;
+    }
+
     setIsUpdatingWebhook(true);
     try {
-      await updateWebhookConfig(localWebhookUrl);
+      await updateWebhookConfig(localWebhookUrl, localSecretToken);
       alert('Webhook configuration updated');
     } catch (e) {
-      alert('Failed to update webhook');
+      alert(e.message || 'Failed to update webhook');
     } finally {
       setIsUpdatingWebhook(false);
     }
@@ -108,59 +119,68 @@ export default function App() {
 
   const handleReLogin = async () => {
     if (!currentAccountId) return;
-    if (confirm(`Reset session and re-login for ${currentAccountId}?`)) {
-      try {
-        await reLogin(currentAccountId);
-      } catch (e) {
-        alert('Failed to restart login process');
-      }
+    try {
+      await reLogin(currentAccountId);
+      alert('Re-login triggered. Please scan the QR code if necessary.');
+    } catch (e) {
+      alert('Failed to trigger re-login');
     }
   };
 
+  const refreshQRImage = () => {
+    refreshQR();
+  };
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <List size={20} /> Accounts
+      <div className="w-72 bg-white border-r border-gray-200 flex flex-col shadow-sm z-10">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-blue-600 flex items-center gap-2">
+            <MessageSquare size={24} /> Zalo Gateway
           </h2>
-          <Button size="icon" variant="secondary" onClick={() => setShowAddAccount(!showAddAccount)}>
-            <Plus size={16} />
-          </Button>
         </div>
 
-        {showAddAccount && (
-          <div className="p-4 border-b border-gray-200 bg-gray-50 flex flex-col gap-2">
-            <label className="text-xs font-medium uppercase text-gray-500 flex items-center gap-1">
-              Account ID <span className="lowercase text-[10px]">(Optional)</span>
-            </label>
-            <Input
-              value={newAccountId}
-              onChange={(e) => setNewAccountId(e.target.value)}
-              placeholder="Leave empty to auto-detect"
-            />
-            <Button onClick={handleAddAccount} variant="primary" size="sm">Add Account</Button>
-            <p className="text-[10px] text-gray-400">If empty, it will be named after login.</p>
-          </div>
-        )}
+        <div className="p-4">
+          {showAddAccount ? (
+            <div className="flex flex-col gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+               <Input
+                value={newAccountId}
+                onChange={(e) => setNewAccountId(e.target.value)}
+                placeholder="Account ID (Phone)"
+                className="bg-white"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1" onClick={handleAddAccount}>Add</Button>
+                <Button size="sm" variant="secondary" onClick={() => setShowAddAccount(false)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="secondary" className="w-full justify-start" onClick={() => setShowAddAccount(true)}>
+              <Plus size={16} className="mr-2" /> Add Account
+            </Button>
+          )}
+        </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {accounts.map(acc => (
+        <div className="flex-1 overflow-y-auto px-2 pb-4">
+          <div className="text-xs font-semibold text-gray-400 px-4 py-2 uppercase tracking-wider">
+            My Accounts
+          </div>
+          {accounts.map((acc) => (
             <div
               key={acc.accountId}
               onClick={() => setCurrentAccountId(acc.accountId)}
-              className={`p-4 cursor-pointer hover:bg-gray-50 flex flex-col gap-1 relative group ${currentAccountId === acc.accountId ? 'bg-blue-50 border-r-4 border-blue-500' : ''}`}
+              className={`group flex items-center justify-between px-4 py-3 rounded-lg cursor-pointer transition-all mb-1 relative ${
+                currentAccountId === acc.accountId
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'hover:bg-gray-100 text-gray-600'
+              }`}
             >
-              <div className="flex justify-between items-center pr-6">
-                <span className={`font-semibold truncate ${acc.accountId.startsWith('pending_') ? 'italic text-gray-400' : ''}`}>
-                  {acc.accountId}
-                </span>
-                <div className={`w-2 h-2 rounded-full ${acc.isAuthenticated ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className={`w-2 h-2 rounded-full shrink-0 ${acc.isAuthenticated ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                <span className="font-medium truncate">{acc.accountId}</span>
               </div>
-              <span className="text-xs text-gray-500 pr-6">
-                {acc.isAuthenticated ? (acc.isListening ? 'Online' : 'Connected') : (acc.accountId.startsWith('pending_') ? 'Waiting for Login...' : 'Offline')}
-              </span>
               <button
                 onClick={(e) => handleDeleteAccount(acc.accountId, e)}
                 className="absolute top-4 right-2 p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -229,12 +249,24 @@ export default function App() {
                     onChange={(e) => setLocalWebhookUrl(e.target.value)}
                     placeholder="https://your-webhook-endpoint.com/api/callback"
                   />
+                </div>
+
+                <label className="text-sm font-medium mt-2 mb-1 block flex items-center gap-2">
+                  <Lock size={14} /> Secret Token (Authorization: Bearer token)
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    value={localSecretToken}
+                    onChange={(e) => setLocalSecretToken(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                  />
                   <Button
                     onClick={handleUpdateWebhook}
                     loading={isUpdatingWebhook}
                     variant="primary"
                   >
-                    Save
+                    Save Config
                   </Button>
                 </div>
               </div>
@@ -251,7 +283,7 @@ export default function App() {
                     className="w-64 h-64"
                   />
                 </div>
-                <Button onClick={refreshQR}>
+                <Button onClick={refreshQRImage}>
                   <RefreshCw size={16} className="mr-2 inline" /> Refresh QR
                 </Button>
               </div>
