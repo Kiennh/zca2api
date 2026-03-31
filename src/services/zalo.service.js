@@ -86,6 +86,18 @@ class ZaloService {
 
     return finalGroups;
   }
+
+  getGroupInfoFromCache(groupId) {
+    if (!this.sessionFile || !fs.existsSync(this.sessionFile)) return null;
+    try {
+      const sessionData = JSON.parse(fs.readFileSync(this.sessionFile, 'utf8'));
+      const cache = sessionData.groups || {};
+      return cache[groupId] || null;
+    } catch (e) {
+      console.error("Failed to read session file for group cache:", e.message);
+      return null;
+    }
+  }
 }
 
 module.exports = ZaloService;

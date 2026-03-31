@@ -33,6 +33,12 @@ module.exports = (accountId, zaloService, messageStore, configStore, onFailure) 
       if (webhookUrl) {
         try {
           const data = msg.data || {};
+          let groupName = null;
+          if (msg.type === 1) { // Group 
+            const cached = zaloService.getGroupInfoFromCache(msg.threadId);
+            if (cached) groupName = cached.name;
+          }
+
           const formatted = {
             accountId: accountId,
             from: data.dName || data.uidFrom || (msg.isSelf ? 'Me' : 'Unknown'),
@@ -40,6 +46,7 @@ module.exports = (accountId, zaloService, messageStore, configStore, onFailure) 
             text: typeof data.content === 'string' ? data.content : JSON.stringify(data.content || ''),
             isGroup: msg.type === 1,
             threadId: msg.threadId,
+            title: groupName,
             isSelf: msg.isSelf,
             raw: msg
           };
