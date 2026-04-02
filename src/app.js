@@ -189,6 +189,9 @@ async function start() {
 
         if (account.currentAttemptId !== currentAttemptId) return;
 
+        const selfInfo = await api.getSelfInfo();
+        console.log(`[${accountId}] Logged in as: ${selfInfo.name} (${selfInfo.uid})`);
+
         account.zaloApi = api;
         account.isAuthenticated = true;
         console.log(`[${accountId}] Logged in successfully using saved session!`);
@@ -227,6 +230,9 @@ async function start() {
         });
 
         if (account.currentAttemptId !== currentAttemptId) return;
+
+        const selfInfo = await api.getSelfInfo();
+        console.log(`[${accountId}] Logged in via QR as: ${selfInfo.name} (${selfInfo.uid})`);
 
         account.zaloApi = api;
         account.isAuthenticated = true;
