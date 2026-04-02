@@ -71,6 +71,8 @@ async function start() {
       qrActions: null,
       zaloApi: null,
       isResetting: false,
+      loginTimeout: null,
+      currentAttemptId: null,
     };
 
     accounts.set(accountId, account);
@@ -120,22 +122,74 @@ async function start() {
     return newId;
   }
 
+  function cleanupAccountResources(accountId, deleteSession = false) {
+    const account = accounts.get(accountId);
+    if (!account) return;
+
+    console.log(`[${accountId}] Cleaning up resources (deleteSession: ${deleteSession})...`);
+
+    if (account.loginTimeout) {
+      clearTimeout(account.loginTimeout);
+      account.loginTimeout = null;
+    }
+
+    if (account.zaloApi) {
+      if (account.zaloApi.listener) {
+        try {
+          account.zaloApi.listener.removeAllListeners();
+          account.zaloApi.listener.stop();
+        } catch (e) {
+          console.error(`[${accountId}] Error stopping listener:`, e.message);
+        }
+      }
+      account.zaloApi = null;
+    }
+
+    account.zaloService.client = null;
+    account.zaloService.isListening = false;
+    account.isAuthenticated = false;
+    account.qrActions = null;
+
+    if (fs.existsSync(account.qrFile)) {
+      try {
+        fs.unlinkSync(account.qrFile);
+      } catch (err) { }
+    }
+
+    if (deleteSession && fs.existsSync(account.sessionFile)) {
+      try {
+        fs.unlinkSync(account.sessionFile);
+        console.log(`[${accountId}] Session file deleted.`);
+      } catch (err) {
+        console.error(`[${accountId}] Failed to delete session file:`, err.message);
+      }
+    }
+  }
+
   async function loginProcess(accountId) {
     let account = accounts.get(accountId);
     if (!account) return;
-    console.log(`[${accountId}] loading account ${account.sessionFile}`);
+
+    cleanupAccountResources(accountId);
+    const currentAttemptId = Date.now();
+    account.currentAttemptId = currentAttemptId;
+
+    console.log(`[${accountId}] Loading account (Attempt: ${currentAttemptId})`);
     const zalo = new Zalo({ selfListen: true, checkUpdate: true });
 
     if (fs.existsSync(account.sessionFile)) {
-      account.isAuthenticated = true;
       console.log(`[${accountId}] Found session file, attempting to resume...`);
       try {
         const sessionData = JSON.parse(fs.readFileSync(account.sessionFile, 'utf8'));
-        account.zaloApi = await zalo.login({
+        const api = await zalo.login({
           cookie: sessionData.cookie,
           imei: sessionData.imei,
           userAgent: sessionData.userAgent || getRandomUserAgent()
         });
+
+        if (account.currentAttemptId !== currentAttemptId) return;
+
+        account.zaloApi = api;
         account.isAuthenticated = true;
         console.log(`[${accountId}] Logged in successfully using saved session!`);
         account.qrActions = null;
@@ -145,11 +199,13 @@ async function start() {
     }
 
     if (!account.isAuthenticated) {
+      if (account.currentAttemptId !== currentAttemptId) return;
       console.log(`[${accountId}] Starting QR login...`);
       try {
         const selectedUserAgent = getRandomUserAgent();
-        console.log(`[${accountId}] Selected random User Agent: ${selectedUserAgent}`);
-        account.zaloApi = await zalo.loginQR({ userAgent: selectedUserAgent, qrPath: account.qrFile }, (event) => {
+        const api = await zalo.loginQR({ userAgent: selectedUserAgent, qrPath: account.qrFile }, (event) => {
+          if (account.currentAttemptId !== currentAttemptId) return;
+
           if (event.actions) {
             account.qrActions = event.actions;
           }
@@ -169,16 +225,23 @@ async function start() {
             }
           }
         });
+
+        if (account.currentAttemptId !== currentAttemptId) return;
+
+        account.zaloApi = api;
         account.isAuthenticated = true;
         console.log(`[${accountId}] Logged in successfully via QR!`);
         account.qrActions = null;
       } catch (error) {
+        if (account.currentAttemptId !== currentAttemptId) return;
         console.error(`[${accountId}] QR login failed:`, error.message);
         account.qrActions = null;
-        setTimeout(() => loginProcess(accountId), 5000);
+        account.loginTimeout = setTimeout(() => loginProcess(accountId), 5000);
         return;
       }
     }
+
+    if (account.currentAttemptId !== currentAttemptId) return;
 
     if (account.zaloApi) {
       account.zaloService.client = account.zaloApi;
@@ -206,36 +269,19 @@ async function start() {
     account.isResetting = true;
     console.log(`!!! [${accountId}] Resetting session due to failure or manual request...`);
 
-    account.isAuthenticated = false;
-    account.zaloService.isListening = false;
-    account.zaloService.client = null;
-    account.qrActions = null;
-
-    if (fs.existsSync(account.sessionFile)) {
-      try {
-        fs.unlinkSync(account.sessionFile);
-        console.log(`[${accountId}] Session file deleted.`);
-      } catch (err) {
-        console.error(`[${accountId}] Failed to delete session file:`, err.message);
-      }
-    }
-
-    if (fs.existsSync(account.qrFile)) {
-      try {
-        fs.unlinkSync(account.qrFile);
-      } catch (err) { }
-    }
-
+    cleanupAccountResources(accountId, true);
     account.isResetting = false;
     loginProcess(accountId);
   }
 
   // Resume existing accounts
-  const existingAccounts = fs.readdirSync(ACCOUNTS_DIR);
-  for (const accountId of existingAccounts) {
-    if (fs.statSync(path.join(ACCOUNTS_DIR, accountId)).isDirectory()) {
-      const account = await createAccount(accountId);
-      loginProcess(accountId);
+  if (fs.existsSync(ACCOUNTS_DIR)) {
+    const existingAccounts = fs.readdirSync(ACCOUNTS_DIR);
+    for (const accountId of existingAccounts) {
+      if (fs.statSync(path.join(ACCOUNTS_DIR, accountId)).isDirectory()) {
+        await createAccount(accountId);
+        loginProcess(accountId);
+      }
     }
   }
 
@@ -360,14 +406,7 @@ async function start() {
     const account = req.account;
 
     console.log(`Deleting account ${accountId}`);
-
-    // Stop listener and cleanup memory
-    if (account.zaloApi && account.zaloApi.listener) {
-      try {
-        account.zaloApi.listener.stop();
-      } catch (e) { }
-    }
-
+    cleanupAccountResources(accountId, true);
     accounts.delete(accountId);
 
     // Delete files
@@ -474,16 +513,16 @@ async function start() {
    *       required: true
    *       content:
    *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               text:
-   *                 type: string
-   *               threadId:
-   *                 type: string
-   *               type:
-   *                 type: string
-   *                 enum: [user, group]
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 text:
+   *                   type: string
+   *                 threadId:
+   *                   type: string
+   *                 type:
+   *                   type: string
+   *                   enum: [user, group]
    *     responses:
    *       200:
    *         description: Message sent
