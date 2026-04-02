@@ -181,16 +181,17 @@ async function start() {
       console.log(`[${accountId}] Found session file, attempting to resume...`);
       try {
         const sessionData = JSON.parse(fs.readFileSync(account.sessionFile, 'utf8'));
+        console.log(`[${accountId}] Session data:`, sessionData);
         const api = await zalo.login({
           cookie: sessionData.cookie,
           imei: sessionData.imei,
           userAgent: sessionData.userAgent || getRandomUserAgent()
         });
-
+        console.log("login success");
         if (account.currentAttemptId !== currentAttemptId) return;
 
-        const selfInfo = await api.getSelfInfo();
-        console.log(`[${accountId}] Logged in as: ${selfInfo.name} (${selfInfo.uid})`);
+        const selfInfo = await api.getOwnId();
+        console.log(`[${accountId}] Logged in)`, selfInfo);
 
         account.zaloApi = api;
         account.isAuthenticated = true;
@@ -231,8 +232,8 @@ async function start() {
 
         if (account.currentAttemptId !== currentAttemptId) return;
 
-        const selfInfo = await api.getSelfInfo();
-        console.log(`[${accountId}] Logged in via QR as: ${selfInfo.name} (${selfInfo.uid})`);
+        const selfInfo = await api.getOwnId();
+        console.log(`[${accountId}] Logged in via QR )`, selfInfo);
 
         account.zaloApi = api;
         account.isAuthenticated = true;
@@ -255,7 +256,7 @@ async function start() {
       let currentId = account.accountId;
       if (currentId.startsWith('pending_')) {
         try {
-          const selfInfo = await account.zaloApi.getSelfInfo();
+          const selfInfo = await account.zaloApi.getUserInfo();
           if (selfInfo && selfInfo.uid) {
             const realUid = selfInfo.uid.toString();
             currentId = await renameAccount(currentId, realUid);
